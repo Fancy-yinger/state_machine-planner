@@ -112,7 +112,8 @@ namespace statemachine
       LANDING = 4,         //着陆阶段
       PERCHING = 5,        //特种降落模式，实现精准停泊或抓取操作
       ATRAJECTORY = 6,     // A* 轨迹规划状态
-      OBJ_PLANNER = 7       // ObjPlanner 实时轨迹规划状态
+      OBJ_PLANNER = 7,     // ObjPlanner 实时轨迹规划状态
+      EMERGENCY_HOVER = 8  // 【新增】紧急悬停状态 (故障保护)
     };
     
     // Define vectors and matrices

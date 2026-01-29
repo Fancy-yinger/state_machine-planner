@@ -783,14 +783,28 @@ namespace statemachine
     start_pt_msg.yaw = 0.0; start_pt_msg.pitch = 0.0; start_pt_msg.time_from_start = 0.0;
     path_points.push_back(start_pt_msg);
 
-    // 3.2 【修改点】根据距离动态计算中间点数量，确保密度适配高速飞行
+    // 3.2 【优化版】自适应采样点数计算
     double total_dist = (local_target - start_pos).norm();
-    // 密度设为 0.6m (适配 3m/s 速度: 3m/s * 0.2s = 0.6m)，且至少有 2 个点
-    int num_waypoints = std::max(2, (int)(total_dist / 0.6));
 
-    // 打印调试信息，确认修复生效
-    ROS_INFO("[OBJ_PLANNER_WRAPPER]: Generating path with %d waypoints for dist=%.2fm (density=0.6m/pt)",
-             num_waypoints, total_dist);
+    // 【核心策略】
+    // 1. 设定最小点数 (min_points = 8)：解决短距离(1-2m)报错 -1021 的问题。
+    //    当距离很短时，这个保底值会自动将密度提高（例如 1m / 8 = 0.125m），这是好事。
+    // 2. 设定正常密度 (normal_density = 0.6m)：保证长距离(30m)时点数适中。
+    //    30m / 0.6 = 50 个点，计算非常快，不会卡顿。
+
+    int min_points = 8;  // 只要有不少于8个点，优化器就不会报错
+    double normal_density = 0.6; // 维持原有的 0.6m 密度，适合 3m/s 飞行
+
+    int calculated_points = (int)(total_dist / normal_density);
+
+    // 取二者最大值
+    int num_waypoints = std::max(min_points, calculated_points);
+
+    // 限制最大点数防止溢出 (虽然一般跑不到这么远，但为了安全)
+    if (num_waypoints > 200) num_waypoints = 200;
+
+    ROS_INFO_THROTTLE(1.0, "[OBJ_PLANNER_WRAPPER]: Path gen: dist=%.2fm -> %d pts (density=%.2fm)",
+             total_dist, num_waypoints, total_dist / num_waypoints);
 
     for (int i = 1; i <= num_waypoints; i++)
     {
@@ -910,6 +924,8 @@ namespace statemachine
     if (!target_set_)
       return false;
 
+    // 建议：增加高度判定，防止在终点正上方很高的地方误判到达
+    // 使用 3D 距离判断，也可以拆分为 XY + Z 分别判断
     double distance = (current_pos_ - target_pos_).norm();
     return distance < threshold;
   }
@@ -918,7 +934,12 @@ namespace statemachine
   {
     trajectory_points_.clear();
     has_valid_trajectory_ = false;
-    target_set_ = false;
+
+    // ========== 【核心修复】不要清除目标点！==========
+    // target_set_ = false;  <--- 注释掉，保留目标点
+    // 原因：EMERGENCY_HOVER 只是暂时中断任务，
+    // 恢复后我们仍希望飞往原来的目标，而不是让系统"失忆"。
+    // ==============================================
 
     // 注意：红色历史轨迹 (history_marker_) 不会清除，记录完整飞行路径
   }

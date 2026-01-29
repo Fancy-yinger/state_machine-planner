@@ -57,10 +57,14 @@ private:
 
     double replan_interval_ = 0.5; // 2Hz 重规划
 
+    // --- 【新增】失败计数器 ---
+    int replan_fail_count_;
+    // -----------------------
+
 public:
     StateObjPlanner()
         : last_replan_time_(0), has_active_traj_(false),
-          goal_reached_(false), last_vis_time_(0) {}
+          goal_reached_(false), last_vis_time_(0), replan_fail_count_(0) {}
 
     void enter(StateContext* ctx) override
     {
@@ -87,6 +91,10 @@ public:
         has_active_traj_ = false;
         last_replan_time_ = ros::Time(0);
         finish_time_ = ros::Time(0);  // 重置完成时间
+
+        // --- 【新增】每次进入状态时重置计数器 ---
+        replan_fail_count_ = 0;
+        // ------------------------------------
     }
 
     std::string execute(StateContext* ctx) override
@@ -140,15 +148,30 @@ public:
                 *ctx->goal_received = false;
             }
 
+            // --- 【修改】带有错误处理的规划逻辑 ---
             if (ctx->egoplanner_wrapper->planTrajectory())
             {
+                // 规划成功
                 traj_start_time_ = now;
                 has_active_traj_ = true;
                 last_replan_time_ = now;
 
-                // 发布轨迹可视化
+                replan_fail_count_ = 0; // 成功一次就清零，防止累计误判
                 ctx->egoplanner_wrapper->publishTrajectoryVisualization();
             }
+            else
+            {
+                // 规划失败
+                replan_fail_count_++;
+                ROS_WARN("[State: OBJ_PLANNER] Replan failed! (Count: %d/3)", replan_fail_count_);
+
+                // 【触发条件】连续 3 次规划失败
+                if (replan_fail_count_ >= 3) {
+                    ROS_ERROR("[State: OBJ_PLANNER] Critical planning failure. Triggering EMERGENCY_HOVER!");
+                    return "EMERGENCY_HOVER"; // <--- 触发状态跳转！
+                }
+            }
+            // ------------------------------------
         }
 
         // 6. 执行控制

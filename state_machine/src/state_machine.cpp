@@ -36,6 +36,8 @@
 #include <state_machine/states/state_takeoff.h>
 #include <state_machine/states/state_landing.h>
 #include <state_machine/states/state_armed.h>
+// 【新增】
+#include <state_machine/states/state_emergency_hover.h>
 
 #define FCU_TIME_BUFFER 3.0f
 
@@ -128,7 +130,8 @@ namespace statemachine
     // 对于已迁移的状态 (ARMED, TAKEOFF, OBJ_PLANNER, LANDING)，使用新架构
     // 对于未迁移的状态 (WAYPOINT, TRAJECTORY, PERCHING, ATRAJECTORY)，使用旧的 switch-case
 
-    if (state_ == ARMED || state_ == TAKEOFF || state_ == OBJ_PLANNER || state_ == LANDING)
+    if (state_ == ARMED || state_ == TAKEOFF || state_ == OBJ_PLANNER ||
+        state_ == LANDING || state_ == EMERGENCY_HOVER) // 【新增】
     {
       // 第一次进入这些状态时，初始化指针
       if (current_state_ptr_ == nullptr) {
@@ -137,6 +140,7 @@ namespace statemachine
         else if (state_ == TAKEOFF) target = "TAKEOFF";
         else if (state_ == OBJ_PLANNER) target = "OBJ_PLANNER";
         else if (state_ == LANDING) target = "LANDING";
+        else if (state_ == EMERGENCY_HOVER) target = "EMERGENCY_HOVER"; // 【新增】
         changeState(target); // 这会调用 enter()
       }
 
@@ -438,6 +442,15 @@ namespace statemachine
     //   // 旧的发布逻辑已被 StateObjPlanner 类替代
     // }
     // break;
+
+    // 【新增】EMERGENCY_HOVER 的 case
+    // 由于控制逻辑（发布 setpoint）已经完全移交给 StateEmergencyHover::execute()，
+    // 这里留空即可，或者打印调试信息。
+    case StateMachine::EMERGENCY_HOVER:
+    {
+      // Logic handled in StateEmergencyHover::execute()
+    }
+    break;
 
     }
   }
@@ -1285,6 +1298,9 @@ namespace statemachine
     state_pool_["OBJ_PLANNER"] = std::make_shared<StateObjPlanner>();
     state_pool_["LANDING"] = std::make_shared<StateLanding>();     // 【新增】注册降落状态
 
+    // 【新增】注册紧急悬停状态
+    state_pool_["EMERGENCY_HOVER"] = std::make_shared<StateEmergencyHover>();
+
     // 可以在这里设置初始状态指针，用于测试
     // current_state_ptr_ = state_pool_["OBJ_PLANNER"];
 
@@ -1317,6 +1333,8 @@ namespace statemachine
     else if (new_state_id == "TRAJECTORY") state_ = TRAJECTORY;
     else if (new_state_id == "PERCHING") state_ = PERCHING;
     else if (new_state_id == "ATRAJECTORY") state_ = ATRAJECTORY;
+    // 【新增】正确映射到新的枚举值
+    else if (new_state_id == "EMERGENCY_HOVER") state_ = EMERGENCY_HOVER;
 
     ROS_INFO("[StateMachine] State switched to: %s", new_state_id.c_str());
 

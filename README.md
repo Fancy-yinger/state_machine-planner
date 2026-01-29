@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-# sloth-core
 
 This code can fly!
 
@@ -46,15 +44,6 @@ catkin b
 ## Citation
 In case you use this work as an academic context, please cite as the following.
 
-```
-@misc{yumurtaci_batuhan_sloth,
-  author       = {Batuhan Yumurtaci},
-  title        = {{Vision-Aided Learning Based Perching for a Bioinspired Metamorphic Multirotor}},
-  howpublished = {\url{https://github.com/yumurtaci/sloth-core}},
-  month        = oct,
-  year         = 2022,
-  }
-```
 
 
 
