@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # sloth-core
 
 This code can fly!
@@ -57,3 +58,7 @@ In case you use this work as an academic context, please cite as the following.
 
 
 
+=======
+# state_machine-planner
+UAV state_machine objplanner
+>>>>>>> c46a776763d2ef15660e99613b591afca753ec32
