@@ -1,0 +1,96 @@
+<launch>
+	<!--
+		ObjPlanner State Machine Launch File
+		用于启动带有 ObjPlanner 集成的状态机
+
+		使用方法:
+		1. 设置 perching_type=5 以启用 OBJ_PLANNER 状态
+		2. 通过 /planner/goal_pose 话题发布目标点
+		3. 状态机会自动执行实时轨迹规划并避障
+	-->
+
+	<!-- Parameters -->
+	<!-- Waypoint convergence threshold, absolute distance in 3D space -->
+	<arg name="wp_convergence_threshold" default="0.3"/>
+	<!-- Waypoint stop threshold, absolute velocity in 3D space -->
+	<arg name="wp_stopped_threshold" default="0.1"/>
+	<!-- Type of perching maneuver, 1-no perch 2-vertical 3-inclined 4-Atrajectory 5-OBJ_PLANNER -->
+  	<arg name="perching_type" default="5"/>
+	<!-- Threshold value for time to contact, disarms and closes the arms -->
+	<arg name="ttc_threshold_ver" default="0.25"/>
+	<arg name="ttc_threshold_inc" default="0.15"/>
+	<!-- Maximum acceleration of the geometric controller -->
+  	<arg name="max_acc" default="3.0"/>
+
+	<!-- ObjPlanner Parameters -->
+	<arg name="obj_planner_max_vel" default="3.0"/>  <!-- 【高速配置】目标速度 3.0 m/s -->
+	<arg name="obj_planner_max_acc" default="2.5"/>  <!-- 【高速配置】加速度 2.5 m/s² -->
+	<arg name="obj_planner_max_jerk" default="4.0"/> <!-- 最大加加速度 m/s³ -->
+	<arg name="obj_planner_map_size" default="40.0"/> <!-- 地图大小 m (优化：从100m降至40m以提升性能) -->
+	<arg name="obj_planner_map_height" default="5.0"/> <!-- 地图高度 m (优化：从10m降至5m以提升性能) -->
+	<arg name="obj_planner_map_resolution" default="0.4"/> <!-- 地图分辨率 m -->
+	<arg name="obj_planner_map_inflate" default="0.8"/> <!-- 【安全配置】障碍物膨胀 m，确保小障碍物被识别 -->
+
+	<!-- State Machine -->
+	<node name="state_machine" pkg="state_machine" type="state_machine" output="screen" clear_params="true">
+		<rosparam command="load" file="$(find planner)/cfg/waypoints_cfg.yaml"/>
+		<rosparam command="load" file="$(find state_machine)/launch/obstacles.yaml"/>
+		<param name="wp_convergence_threshold" value="$(arg wp_convergence_threshold)" />
+		<param name="wp_stopped_threshold" value="$(arg wp_stopped_threshold)" />
+		<param name="ttc_threshold_ver" value="$(arg ttc_threshold_ver)" />
+		<param name="ttc_threshold_inc" value="$(arg ttc_threshold_inc)" />
+		<param name="perching_type" value="$(arg perching_type)" />
+
+		<!-- ObjPlanner 配置 -->
+		<param name="obj_planner/max_vel" value="$(arg obj_planner_max_vel)" />
+		<param name="obj_planner/max_acc" value="$(arg obj_planner_max_acc)" />
+		<param name="obj_planner/max_jerk" value="$(arg obj_planner_max_jerk)" />
+		<param name="obj_planner/map_size" value="$(arg obj_planner_map_size)" />
+		<param name="obj_planner/map_height" value="$(arg obj_planner_map_height)" />
+		<param name="obj_planner/map_resolution" value="$(arg obj_planner_map_resolution)" />
+		<param name="obj_planner/map_inflate" value="$(arg obj_planner_map_inflate)" />
+    </node>
+
+	<!--- Trajectory Planner (kept for compatibility, may not be used in OBJ_PLANNER mode) -->
+	<node name="planner" pkg="planner" type="planner" output="screen" clear_params="true">
+		<rosparam command="load" file="$(find planner)/cfg/trajectory_config.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/vertical_perching_config.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/inclined_perching_config.yaml"/>
+		<rosparam command="load" file="$(find state_machine)/launch/obstacles.yaml"/>
+		<param name="perching_type" value="$(arg perching_type)" />
+	</node>
+
+	<!-- Trajectory Sampler - Converts polynomial trajectory to control points -->
+	<node name="sampler" pkg="mav_trajectory_generation_ros" type="trajectory_sampler_node" output="screen">
+		<remap from="path_segments_4D" to="trajectory"/>
+	</node>
+
+	<!-- Geometric Controller -->
+  	<arg name="mav_name" default="iris"/>
+  	<arg name="command_input" default="2" />
+  	<arg name="auto_arm_controller" default="false" />
+  	<node pkg="geometric_controller" type="geometric_controller_node" name="geometric_controller">
+  		<param name="mav_name" type="string" value="$(arg mav_name)" />
+		  <remap from="reference/pose" to="/mavros/setpoint_position/local"/>
+		  <param name="ctrl_mode" value="4" />
+          <param name="enable_sim" value="$(arg auto_arm_controller)" />
+          <param name="enable_gazebo_state" value="true"/>
+		  <param name="init_pos_x" value="0.0" />
+		  <param name="init_pos_y" value="0.0" />
+		  <param name="init_pos_z" value="-1.0" />
+          <param name="max_acc" value="$(arg max_acc)" />
+		  <param name="Kp_x" value="2.0" />
+          <param name="Kp_y" value="2.0" />
+          <param name="Kp_z" value="3.0" />
+          <param name="Kv_x" value="1.0"/>
+		  <param name="Kv_y" value="1.0"/>
+		  <param name="Kv_z" value="1.5"/>
+  	</node>
+
+	<!-- 目标点发布示例 (可选，用于测试) -->
+	<!-- <node name="goal_publisher" pkg="state_machine" type="goal_publisher.py" output="screen"/> -->
+
+	<!-- RVIZ -->
+	<node type="rviz" name="rviz" pkg="rviz" respawn="false" args="-d $(find planner)/cfg/sloth.rviz" />
+
+</launch>
